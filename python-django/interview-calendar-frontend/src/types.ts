@@ -18,3 +18,34 @@ export interface AppointmentFormData {
   interviewer: string;
   notes: string;
 } 
+
+export interface Slot {
+  start: string;
+  end?: string;
+  day_of_week: string;
+}
+
+export type DayOfWeek = "Monday" | "Tuesday" | "Wednesday" | "Thursday" | "Friday" | "Saturday" | "Sunday";
+export type TimeString = string; 
+export type TimeSlots = {
+  [key in DayOfWeek]?: TimeString[]
+}
+
+export interface BookingData {
+  start: string;
+  end: string;
+  day_of_week: string;
+  operation?: 'book' | 'create';
+}
+
+export type NotificationType = "success" | "error" | "info";
+
+export interface NotificationProps {
+  message: string;
+  type: NotificationType;
+  isVisible: boolean;
+  onClose: () => void;
+  autoHideDuration?: number;
+}
+
+export type ViewMode = "desktop" | "mobile-days" | "mobile-slots";
