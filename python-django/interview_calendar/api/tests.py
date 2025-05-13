@@ -37,7 +37,7 @@ class CalendarAPITestCase(TestCase):
             for slot in data
         ))
     
-    def test_post_calendar_free(self):
+    def test_post_book_slot(self):
         """Test POST request to book a time slot"""
         url = reverse('user_calendar_free', args=[1])
         
@@ -45,7 +45,8 @@ class CalendarAPITestCase(TestCase):
         slot_to_book = {
             "start": "2025-05-12T09:00:00+00:00",
             "end": "2025-05-12T10:00:00+00:00",
-            "day_of_week": "Monday"
+            "day_of_week": "Monday",
+            "operation": "book"
         }
         
         # Make the POST request
@@ -75,15 +76,77 @@ class CalendarAPITestCase(TestCase):
             ).exists()
         )
     
-    def test_post_nonexistent_slot(self):
-        """Test POST request with a slot that doesn't exist"""
+    def test_post_create_slot(self):
+        """Test POST request to create a new available time slot"""
+        url = reverse('user_calendar_free', args=[1])
+        
+        # Data for the new slot to create
+        new_slot = {
+            "start": "2025-05-12T11:00:00+00:00",
+            "end": "2025-05-12T12:00:00+00:00",
+            "day_of_week": "Monday",
+            "operation": "create"
+        }
+        
+        # Make the POST request
+        response = self.client.post(
+            url, 
+            data=json.dumps(new_slot),
+            content_type='application/json'
+        )
+        
+        # Check that the response is 201 Created
+        self.assertEqual(response.status_code, 201)
+        
+        # Parse the JSON response
+        data = json.loads(response.content)
+        
+        # Check that the response contains the data we sent
+        self.assertEqual(data['day_of_week'], 'Monday')
+        self.assertTrue('11:00' in data['start'])
+        
+        # Check that the slot was actually created in the database
+        self.assertTrue(
+            FreeTimeSlot.objects.filter(
+                user_id=1,
+                day_of_week='Monday',
+                start_time__hour=11,
+                start_time__minute=0
+            ).exists()
+        )
+    
+    def test_post_create_duplicate_slot(self):
+        """Test POST request to create a slot that already exists"""
+        url = reverse('user_calendar_free', args=[1])
+        
+        # Data for a slot that already exists
+        duplicate_slot = {
+            "start": "2025-05-12T09:00:00+00:00",
+            "end": "2025-05-12T10:00:00+00:00",
+            "day_of_week": "Monday",
+            "operation": "create"
+        }
+        
+        # Make the POST request
+        response = self.client.post(
+            url, 
+            data=json.dumps(duplicate_slot),
+            content_type='application/json'
+        )
+        
+        # Check that the response is 404 Not Found (or could be 400 Bad Request)
+        self.assertEqual(response.status_code, 404)
+    
+    def test_post_book_nonexistent_slot(self):
+        """Test POST request to book a slot that doesn't exist"""
         url = reverse('user_calendar_free', args=[1])
         
         # Data for a slot that doesn't exist
         nonexistent_slot = {
-            "start": "2025-05-12T11:00:00+00:00",
-            "end": "2025-05-12T12:00:00+00:00",
-            "day_of_week": "Monday"
+            "start": "2025-05-12T14:00:00+00:00",
+            "end": "2025-05-12T15:00:00+00:00",
+            "day_of_week": "Monday",
+            "operation": "book"
         }
         
         # Make the POST request
@@ -95,6 +158,28 @@ class CalendarAPITestCase(TestCase):
         
         # Check that the response is 404 Not Found
         self.assertEqual(response.status_code, 404)
+    
+    def test_post_invalid_operation(self):
+        """Test POST request with an invalid operation"""
+        url = reverse('user_calendar_free', args=[1])
+        
+        # Data with invalid operation
+        invalid_operation = {
+            "start": "2025-05-12T09:00:00+00:00",
+            "end": "2025-05-12T10:00:00+00:00",
+            "day_of_week": "Monday",
+            "operation": "invalid_operation"
+        }
+        
+        # Make the POST request
+        response = self.client.post(
+            url, 
+            data=json.dumps(invalid_operation),
+            content_type='application/json'
+        )
+        
+        # Check that the response is 400 Bad Request
+        self.assertEqual(response.status_code, 400)
     
     def test_post_invalid_data(self):
         """Test POST request with invalid data"""

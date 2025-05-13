@@ -30,3 +30,10 @@ export type TimeString = string;
 export type TimeSlots = {
   [key in DayOfWeek]?: TimeString[]
 }
+
+export interface BookingData {
+  start: string;
+  end: string;
+  day_of_week: string;
+  operation?: 'book' | 'create';
+}

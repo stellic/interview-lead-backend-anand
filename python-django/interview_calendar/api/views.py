@@ -2,7 +2,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 import json
 
-from .schedule import calendar_free, book_time_slot
+from .schedule import calendar_free, book_time_slot, create_free_time_slot
 
 
 def get_users(request):
@@ -31,15 +31,35 @@ def user_calendar_free(request, user_id):
                     status=400
                 )
             
-            # Book the time slot (remove it from available slots)
-            booked_slot = book_time_slot(
-                user_id=user_id,
-                start=data['start'],
-                end=data['end'],
-                day_of_week=data['day_of_week']
-            )
+            # Check if we're booking or creating a slot
+            operation = data.get('operation', 'book')
             
-            return JsonResponse(booked_slot, status=200)
+            if operation == 'book':
+                # Book the time slot (remove it from available slots)
+                result = book_time_slot(
+                    user_id=user_id,
+                    start=data['start'],
+                    end=data['end'],
+                    day_of_week=data['day_of_week']
+                )
+                return JsonResponse(result, status=200)
+            
+            elif operation == 'create':
+                # Create a new available slot
+                result = create_free_time_slot(
+                    user_id=user_id,
+                    start=data['start'],
+                    end=data['end'],
+                    day_of_week=data['day_of_week']
+                )
+                return JsonResponse(result, status=201)
+            
+            else:
+                return JsonResponse(
+                    {"error": "Invalid operation. Must be 'book' or 'create'"},
+                    status=400
+                )
+                
         except json.JSONDecodeError:
             return JsonResponse(
                 {"error": "Invalid JSON data"},

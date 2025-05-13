@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { TimeSlots } from "../types";
 import { AVAILABILITY_API_URL } from "../config";
 import BookingModal from "../components/BookingModal";
+import UnbookModal from "../components/UnbookModal";
 import Notification, { NotificationType } from "../components/Notification";
 import {
   DAY_OF_THE_WEEK,
@@ -12,7 +13,8 @@ import {
 
 const AvailabilityCalendar = () => {
   const [timeSlots, setTimeSlots] = useState<TimeSlots>({});
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isBookModalOpen, setIsBookModalOpen] = useState(false);
+  const [isUnbookModalOpen, setIsUnbookModalOpen] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<{
     day: string;
     time: string;
@@ -45,9 +47,13 @@ const AvailabilityCalendar = () => {
     }
   };
 
-  const handleSlotClick = (day: string, time: string) => {
+  const handleSlotClick = (day: string, time: string, isAvailable: boolean) => {
     setSelectedSlot({ day, time });
-    setIsModalOpen(true);
+    if (isAvailable) {
+      setIsBookModalOpen(true);
+    } else {
+      setIsUnbookModalOpen(true);
+    }
   };
 
   const handleConfirmBooking = async () => {
@@ -57,10 +63,10 @@ const AvailabilityCalendar = () => {
 
     try {
       // Create the booking data
-      const bookingData = createBookingData(
-        selectedSlot.day,
-        selectedSlot.time
-      );
+      const bookingData = {
+        ...createBookingData(selectedSlot.day, selectedSlot.time),
+        operation: "book",
+      };
 
       // Send the POST request
       const response = await fetch(AVAILABILITY_API_URL, {
@@ -80,7 +86,7 @@ const AvailabilityCalendar = () => {
       await fetchTimeSlots();
 
       // Close the modal
-      setIsModalOpen(false);
+      setIsBookModalOpen(false);
       setSelectedSlot(null);
 
       // Show success notification
@@ -98,8 +104,61 @@ const AvailabilityCalendar = () => {
     }
   };
 
+  const handleConfirmUnbooking = async () => {
+    if (!selectedSlot) return;
+
+    setIsLoading(true);
+
+    try {
+      // Create the unbooking data
+      const unbookingData = {
+        ...createBookingData(selectedSlot.day, selectedSlot.time),
+        operation: "create",
+      };
+
+      // Send the POST request
+      const response = await fetch(AVAILABILITY_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(unbookingData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to cancel booking");
+      }
+
+      // Refresh the data from the server
+      await fetchTimeSlots();
+
+      // Close the modal
+      setIsUnbookModalOpen(false);
+      setSelectedSlot(null);
+
+      // Show success notification
+      showNotification("Booking cancelled successfully!", "success");
+    } catch (error) {
+      console.error("Error cancelling booking:", error);
+      showNotification(
+        `Failed to cancel booking: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
+        "error"
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleCancelBooking = () => {
-    setIsModalOpen(false);
+    setIsBookModalOpen(false);
+    setSelectedSlot(null);
+  };
+
+  const handleCancelUnbooking = () => {
+    setIsUnbookModalOpen(false);
     setSelectedSlot(null);
   };
 
@@ -125,46 +184,64 @@ const AvailabilityCalendar = () => {
       </h1>
 
       <div className="bg-white p-6 rounded-lg shadow-md">
+        <div className="mb-4 text-sm text-gray-600">
+          <p>
+            <span className="text-blue-500 font-semibold">Blue slots</span> are
+            booked. You can click on them to cancel a booking
+          </p>
+          <p>
+            <span className="text-grey-500 font-semibold">Grey slots</span> are
+            available. You can click on them to make a booking
+          </p>
+        </div>
         <ul className="grid grid-cols-7 gap-4">
           {DAY_OF_THE_WEEK.map((day) => (
             <li key={day} className="border rounded-lg p-3">
               <div className="font-semibold text-center bg-gray-100 p-2 mb-3 rounded">
                 {day}
               </div>
-              {SLOTS_OF_THE_DAY.map((slot) => (
-                <div
-                  key={`${day}-${slot}`}
-                  className={`text-center p-2 mb-3 rounded ${
-                    timeSlots[day as keyof typeof timeSlots]?.includes(slot)
-                      ? "bg-blue-500 cursor-pointer hover:bg-blue-600"
-                      : "bg-gray-200"
-                  }`}
-                  onClick={() =>
-                    timeSlots[day as keyof typeof timeSlots]?.includes(slot)
-                      ? handleSlotClick(day, slot)
-                      : null
-                  }
-                >
-                  {slot}
-                </div>
-              ))}
+              {SLOTS_OF_THE_DAY.map((slot) => {
+                const isAvailable =
+                  timeSlots[day as keyof typeof timeSlots]?.includes(slot);
+                return (
+                  <div
+                    key={`${day}-${slot}`}
+                    className={`text-center p-2 mb-3 rounded cursor-pointer ${
+                      isAvailable
+                        ? "bg-gray-300 hover:bg-gray-400"
+                        : "bg-blue-500 hover:bg-blue-600 text-white"
+                    }`}
+                    onClick={() => handleSlotClick(day, slot, isAvailable)}
+                  >
+                    {slot}
+                  </div>
+                );
+              })}
             </li>
           ))}
         </ul>
       </div>
 
       <BookingModal
-        isOpen={isModalOpen}
+        isOpen={isBookModalOpen}
         day={selectedSlot?.day || ""}
         time={selectedSlot?.time || ""}
         onConfirm={handleConfirmBooking}
         onCancel={handleCancelBooking}
       />
 
+      <UnbookModal
+        isOpen={isUnbookModalOpen}
+        day={selectedSlot?.day || ""}
+        time={selectedSlot?.time || ""}
+        onConfirm={handleConfirmUnbooking}
+        onCancel={handleCancelUnbooking}
+      />
+
       {isLoading && (
         <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg shadow-lg">
-            <p>Booking your slot...</p>
+            <p>Processing your request...</p>
           </div>
         </div>
       )}

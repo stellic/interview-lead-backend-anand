@@ -173,3 +173,44 @@ def book_time_slot(user_id: int, start: str, end: str, day_of_week: str) -> dict
         return slot_data
     except FreeTimeSlot.DoesNotExist:
         raise ValueError(f"No available slot found for {day_of_week} at {start_time.strftime('%H:%M')}")
+
+def create_free_time_slot(user_id: int, start: str, end: str, day_of_week: str) -> dict:
+    """Create a new free time slot for a user.
+
+    Args:
+        user_id (int): The id of the user.
+        start (str): The start time in ISO format.
+        end (str): The end time in ISO format.
+        day_of_week (str): The day of the week.
+
+    Returns:
+        dict: The created time slot information.
+    """
+    # Parse the ISO format strings to datetime objects
+    start_time = datetime.datetime.fromisoformat(start)
+    end_time = datetime.datetime.fromisoformat(end)
+    
+    # Check if a slot already exists at this time
+    existing_slot = FreeTimeSlot.objects.filter(
+        user_id=user_id,
+        day_of_week=day_of_week,
+        start_time__hour=start_time.hour,
+        start_time__minute=start_time.minute
+    ).first()
+    
+    if existing_slot:
+        raise ValueError(f"A slot already exists for {day_of_week} at {start_time.strftime('%H:%M')}")
+    
+    # Create a new free time slot
+    slot = FreeTimeSlot.objects.create(
+        user_id=user_id,
+        start_time=start_time,
+        end_time=end_time,
+        day_of_week=day_of_week
+    )
+    
+    return {
+        "start": slot.start_time.isoformat(),
+        "end": slot.end_time.isoformat(),
+        "day_of_week": slot.day_of_week,
+    }
