@@ -1,77 +1,122 @@
 import { useEffect, useState } from "react";
-import { Slot, TimeSlots, DayOfWeek } from "../types";
+import { TimeSlots } from "../types";
+import { AVAILABILITY_API_URL } from "../config";
+import BookingModal from "../components/BookingModal";
+import Notification, { NotificationType } from "../components/Notification";
+import {
+  DAY_OF_THE_WEEK,
+  SLOTS_OF_THE_DAY,
+  formatTimeSlotsData,
+  createBookingData,
+} from "../utils";
 
 const AvailabilityCalendar = () => {
   const [timeSlots, setTimeSlots] = useState<TimeSlots>({});
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedSlot, setSelectedSlot] = useState<{
+    day: string;
+    time: string;
+  } | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const DAY_OF_THE_WEEK = [
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
-    "Sunday",
-  ];
-  const SLOTS_OF_THE_DAY = [
-    "09:00",
-    "09:30",
-    "10:00",
-    "10:30",
-    "11:00",
-    "11:30",
-    "12:00",
-    "12:30",
-    "13:00",
-    "13:30",
-    "14:00",
-    "14:30",
-    "15:00",
-    "15:30",
-    "16:00",
-    "16:30",
-    "17:00",
-    "17:30",
-  ];
+  // Notification state
+  const [notification, setNotification] = useState<{
+    message: string;
+    type: NotificationType;
+    isVisible: boolean;
+  }>({
+    message: "",
+    type: "info",
+    isVisible: false,
+  });
 
   useEffect(() => {
-    const fetchData = async () => {
-      const response = await fetch(
-        "http://127.0.0.1:8000/api/users/1/calendar/free/"
-      );
+    fetchTimeSlots();
+  }, []);
+
+  const fetchTimeSlots = async () => {
+    try {
+      const response = await fetch(AVAILABILITY_API_URL);
       const data = await response.json();
+      setTimeSlots(formatTimeSlotsData(data));
+    } catch (error) {
+      console.error("Error fetching time slots:", error);
+      showNotification("Error fetching time slots. Please try again.", "error");
+    }
+  };
 
-      // Transform data to required format
-      const formattedData: TimeSlots = {};
+  const handleSlotClick = (day: string, time: string) => {
+    setSelectedSlot({ day, time });
+    setIsModalOpen(true);
+  };
 
-      data.forEach((slot: Slot) => {
-        // Convert UTC time to local browser time (I am in PDT atm. so I get 2025-05-12T16:00:00+00:00 → 09:00 (PDT))
-        const localStartTime = new Date(slot.start);
+  const handleConfirmBooking = async () => {
+    if (!selectedSlot) return;
 
-        // Format to HH:MM in local timezone
-        const hours = localStartTime.getHours().toString().padStart(2, "0");
-        const minutes = localStartTime.getMinutes().toString().padStart(2, "0");
-        const timeString = `${hours}:${minutes}`;
-        //console.log(`${slot.start} -> ${timeString}`);
+    setIsLoading(true);
 
-        // Initialize the array for this day if it doesn't exist
-        if (!formattedData[slot.day_of_week as DayOfWeek]) {
-          formattedData[slot.day_of_week as DayOfWeek] = [];
-        }
+    try {
+      // Create the booking data
+      const bookingData = createBookingData(
+        selectedSlot.day,
+        selectedSlot.time
+      );
 
-        // Add the start time if not already in the array
-        if (
-          !formattedData[slot.day_of_week as DayOfWeek]?.includes(timeString)
-        ) {
-          formattedData[slot.day_of_week as DayOfWeek]!.push(timeString);
-        }
+      // Send the POST request
+      const response = await fetch(AVAILABILITY_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(bookingData),
       });
 
-      setTimeSlots(formattedData);
-    };
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to book slot");
+      }
 
-    fetchData();
-  }, []);
+      // Refresh the data from the server
+      await fetchTimeSlots();
+
+      // Close the modal
+      setIsModalOpen(false);
+      setSelectedSlot(null);
+
+      // Show success notification
+      showNotification("Slot booked successfully!", "success");
+    } catch (error) {
+      console.error("Error booking slot:", error);
+      showNotification(
+        `Failed to book slot: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
+        "error"
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCancelBooking = () => {
+    setIsModalOpen(false);
+    setSelectedSlot(null);
+  };
+
+  const showNotification = (message: string, type: NotificationType) => {
+    setNotification({
+      message,
+      type,
+      isVisible: true,
+    });
+  };
+
+  const hideNotification = () => {
+    setNotification((prev) => ({
+      ...prev,
+      isVisible: false,
+    }));
+  };
 
   return (
     <div>
@@ -81,22 +126,24 @@ const AvailabilityCalendar = () => {
 
       <div className="bg-white p-6 rounded-lg shadow-md">
         <ul className="grid grid-cols-7 gap-4">
-          {/* iterate through all days and for each day, display either slots as available or unavailable */}
           {DAY_OF_THE_WEEK.map((day) => (
             <li key={day} className="border rounded-lg p-3">
               <div className="font-semibold text-center bg-gray-100 p-2 mb-3 rounded">
                 {day}
               </div>
-              {/* for this day, iterate through all slots starting from 9 AM to 5 PM in 30 min increments. 
-                  If a slot is in timeSlots, mark it as available (blue), otherwise mark it as unavailable (grey) */}
               {SLOTS_OF_THE_DAY.map((slot) => (
                 <div
                   key={`${day}-${slot}`}
                   className={`text-center p-2 mb-3 rounded ${
                     timeSlots[day as keyof typeof timeSlots]?.includes(slot)
-                      ? "bg-blue-500"
+                      ? "bg-blue-500 cursor-pointer hover:bg-blue-600"
                       : "bg-gray-200"
                   }`}
+                  onClick={() =>
+                    timeSlots[day as keyof typeof timeSlots]?.includes(slot)
+                      ? handleSlotClick(day, slot)
+                      : null
+                  }
                 >
                   {slot}
                 </div>
@@ -105,6 +152,30 @@ const AvailabilityCalendar = () => {
           ))}
         </ul>
       </div>
+
+      <BookingModal
+        isOpen={isModalOpen}
+        day={selectedSlot?.day || ""}
+        time={selectedSlot?.time || ""}
+        onConfirm={handleConfirmBooking}
+        onCancel={handleCancelBooking}
+      />
+
+      {isLoading && (
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg">
+            <p>Booking your slot...</p>
+          </div>
+        </div>
+      )}
+
+      <Notification
+        message={notification.message}
+        type={notification.type}
+        isVisible={notification.isVisible}
+        onClose={hideNotification}
+        autoHideDuration={5000}
+      />
     </div>
   );
 };
