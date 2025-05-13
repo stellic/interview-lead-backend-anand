@@ -1,8 +1,7 @@
 import React, { useEffect } from "react";
+import { NotificationType } from "../types";
 
-export type NotificationType = "success" | "error" | "info";
-
-interface NotificationProps {
+interface NotificationToastProps {
   message: string;
   type: NotificationType;
   isVisible: boolean;
@@ -10,7 +9,7 @@ interface NotificationProps {
   autoHideDuration?: number;
 }
 
-const Notification: React.FC<NotificationProps> = ({
+const NotificationToast: React.FC<NotificationToastProps> = ({
   message,
   type,
   isVisible,
@@ -52,4 +51,4 @@ const Notification: React.FC<NotificationProps> = ({
   );
 };
 
-export default Notification;
+export default NotificationToast;

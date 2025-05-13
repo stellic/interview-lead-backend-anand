@@ -1,51 +1,63 @@
-import { useEffect, useState } from "react";
-import { TimeSlots } from "../types";
-import { AVAILABILITY_API_URL } from "../const";
+import { useState, useEffect } from "react";
+import { ViewMode } from "../types";
+import { DAY_OF_THE_WEEK, SLOTS_OF_THE_DAY } from "../utils";
 import BookingModal from "../components/BookingModal";
 import UnbookModal from "../components/UnbookModal";
-import Notification, { NotificationType } from "../components/Notification";
-import {
-  DAY_OF_THE_WEEK,
-  SLOTS_OF_THE_DAY,
-  formatTimeSlotsData,
-  createBookingData,
-} from "../utils";
+import NotificationToast from "../components/NotificationToast";
+import { useCalendarData } from "../hooks/useCalendarData";
 
 const AvailabilityCalendar = () => {
-  const [timeSlots, setTimeSlots] = useState<TimeSlots>({});
+  // Use our custom hook for data fetching and state management
+  const {
+    timeSlots,
+    isLoading,
+    notification,
+    bookTimeSlot,
+    cancelBooking,
+    hideNotification,
+  } = useCalendarData();
+
+  // UI state
   const [isBookModalOpen, setIsBookModalOpen] = useState(false);
   const [isUnbookModalOpen, setIsUnbookModalOpen] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<{
     day: string;
     time: string;
   } | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
 
-  // Notification state
-  const [notification, setNotification] = useState<{
-    message: string;
-    type: NotificationType;
-    isVisible: boolean;
-  }>({
-    message: "",
-    type: "info",
-    isVisible: false,
-  });
+  // Responsive state
+  const [viewMode, setViewMode] = useState<ViewMode>("desktop");
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
+  // Check screen size on mount and when window resizes
   useEffect(() => {
-    fetchTimeSlots();
-  }, []);
+    const checkScreenSize = () => {
+      if (window.innerWidth < 768) {
+        setViewMode(selectedDay ? "mobile-slots" : "mobile-days");
+      } else {
+        setViewMode("desktop");
+      }
+    };
 
-  const fetchTimeSlots = async () => {
-    try {
-      const response = await fetch(AVAILABILITY_API_URL);
-      const data = await response.json();
-      setTimeSlots(formatTimeSlotsData(data));
-    } catch (error) {
-      console.error("Error fetching time slots:", error);
-      showNotification("Error fetching time slots. Please try again.", "error");
-    }
-  };
+    // Initial check
+    checkScreenSize();
+
+    // Add resize listener
+    window.addEventListener("resize", checkScreenSize);
+
+    // Cleanup
+    return () => window.removeEventListener("resize", checkScreenSize);
+  }, [selectedDay]);
+
+  // Force check screen size when component mounts
+  useEffect(() => {
+    const checkScreenSize = () => {
+      const isMobile = window.innerWidth < 768;
+      setViewMode(isMobile ? "mobile-days" : "desktop");
+    };
+
+    checkScreenSize();
+  }, []);
 
   const handleSlotClick = (day: string, time: string, isAvailable: boolean) => {
     setSelectedSlot({ day, time });
@@ -59,96 +71,24 @@ const AvailabilityCalendar = () => {
   const handleConfirmBooking = async () => {
     if (!selectedSlot) return;
 
-    setIsLoading(true);
-
     try {
-      // Create the booking data
-      const bookingData = {
-        ...createBookingData(selectedSlot.day, selectedSlot.time),
-        operation: "book",
-      };
-
-      // Send the POST request
-      const response = await fetch(AVAILABILITY_API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(bookingData),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to book slot");
-      }
-
-      // Refresh the data from the server
-      await fetchTimeSlots();
-
-      // Close the modal
+      await bookTimeSlot(selectedSlot.day, selectedSlot.time);
       setIsBookModalOpen(false);
       setSelectedSlot(null);
-
-      // Show success notification
-      showNotification("Slot booked successfully!", "success");
     } catch (error) {
-      console.error("Error booking slot:", error);
-      showNotification(
-        `Failed to book slot: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`,
-        "error"
-      );
-    } finally {
-      setIsLoading(false);
+      // Error is already handled in the hook
     }
   };
 
   const handleConfirmUnbooking = async () => {
     if (!selectedSlot) return;
 
-    setIsLoading(true);
-
     try {
-      // Create the unbooking data
-      const unbookingData = {
-        ...createBookingData(selectedSlot.day, selectedSlot.time),
-        operation: "create",
-      };
-
-      // Send the POST request
-      const response = await fetch(AVAILABILITY_API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(unbookingData),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to cancel booking");
-      }
-
-      // Refresh the data from the server
-      await fetchTimeSlots();
-
-      // Close the modal
+      await cancelBooking(selectedSlot.day, selectedSlot.time);
       setIsUnbookModalOpen(false);
       setSelectedSlot(null);
-
-      // Show success notification
-      showNotification("Booking cancelled successfully!", "success");
     } catch (error) {
-      console.error("Error cancelling booking:", error);
-      showNotification(
-        `Failed to cancel booking: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`,
-        "error"
-      );
-    } finally {
-      setIsLoading(false);
+      // Error is already handled in the hook
     }
   };
 
@@ -162,65 +102,150 @@ const AvailabilityCalendar = () => {
     setSelectedSlot(null);
   };
 
-  const showNotification = (message: string, type: NotificationType) => {
-    setNotification({
-      message,
-      type,
-      isVisible: true,
-    });
+  const handleDaySelect = (day: string) => {
+    setSelectedDay(day);
+    setViewMode("mobile-slots");
   };
 
-  const hideNotification = () => {
-    setNotification((prev) => ({
-      ...prev,
-      isVisible: false,
-    }));
+  const handleBackTodays = () => {
+    setSelectedDay(null);
+    setViewMode("mobile-days");
+  };
+
+  // Desktop view rendering
+  const renderDesktopView = () => (
+    <div className="bg-white p-6 rounded-lg shadow-md">
+      <div className="mb-4 text-sm text-gray-600">
+        <p>
+          • Click on a{" "}
+          <span className="text-gray-500 font-semibold">grey slot</span> to book
+          it
+        </p>
+        <p>
+          • Click on a{" "}
+          <span className="text-green-500 font-semibold">green slot</span> to
+          cancel a booking
+        </p>
+      </div>
+      <ul className="grid grid-cols-7 gap-4">
+        {DAY_OF_THE_WEEK.map((day) => (
+          <li key={day} className="border rounded-lg p-3">
+            <div className="font-semibold text-center bg-gray-100 p-2 mb-3 rounded">
+              {day}
+            </div>
+            {SLOTS_OF_THE_DAY.map((slot) => {
+              const isAvailable = timeSlots[day]?.includes(slot);
+              return (
+                <div
+                  key={`${day}-${slot}`}
+                  className={`text-center p-2 mb-3 rounded cursor-pointer ${
+                    isAvailable
+                      ? "bg-gray-300 hover:bg-gray-400"
+                      : "bg-green-500 hover:bg-green-600 text-white"
+                  }`}
+                  onClick={() => handleSlotClick(day, slot, isAvailable)}
+                >
+                  {slot}
+                </div>
+              );
+            })}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+
+  // Mobile days view rendering
+  const renderMobileDaysView = () => (
+    <div className="bg-white p-4 rounded-lg shadow-md">
+      <p className="mb-4 text-sm text-gray-600">
+        Select a day to view available slots:
+      </p>
+      <ul className="space-y-3">
+        {DAY_OF_THE_WEEK.map((day) => {
+          // Count available slots for this day
+          const availableCount = timeSlots[day]?.length || 0;
+          const totalSlots = SLOTS_OF_THE_DAY.length;
+          const bookedCount = totalSlots - availableCount;
+
+          return (
+            <li
+              key={day}
+              className="border rounded-lg p-4 flex justify-between items-center cursor-pointer hover:bg-gray-50"
+              onClick={() => handleDaySelect(day)}
+            >
+              <div className="font-semibold">{day}</div>
+              <div className="text-sm">
+                <span className="text-green-500">{bookedCount} booked</span>
+                {" / "}
+                <span className="text-gray-500">
+                  {availableCount} available
+                </span>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+
+  // Mobile slots view rendering
+  const renderMobileSlotsView = () => {
+    if (!selectedDay) return null;
+
+    return (
+      <div className="bg-white p-4 rounded-lg shadow-md">
+        <div className="flex items-center mb-4">
+          <button
+            className="mr-2 p-2 rounded-full hover:bg-gray-100"
+            onClick={handleBackTodays}
+          >
+            ← Back
+          </button>
+          <h2 className="text-lg font-semibold">{selectedDay}</h2>
+        </div>
+
+        <div className="mb-4 text-sm text-gray-600">
+          <p>
+            • Click on a{" "}
+            <span className="text-gray-500 font-semibold">grey slot</span> to
+            book it
+          </p>
+          <p>
+            • Click on a{" "}
+            <span className="text-green-500 font-semibold">green slot</span> to
+            cancel a booking
+          </p>
+        </div>
+
+        <ul className="space-y-2">
+          {SLOTS_OF_THE_DAY.map((slot) => {
+            const isAvailable = timeSlots[selectedDay]?.includes(slot);
+            return (
+              <li
+                key={`${selectedDay}-${slot}`}
+                className={`p-3 rounded cursor-pointer ${
+                  isAvailable
+                    ? "bg-gray-300 hover:bg-gray-400"
+                    : "bg-green-500 hover:bg-green-600 text-white"
+                }`}
+                onClick={() => handleSlotClick(selectedDay, slot, isAvailable)}
+              >
+                {slot}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    );
   };
 
   return (
-    <div>
-      <h1 className="text-xl font-bold text-gray-800 mb-6">
-        Available Time Slots
-      </h1>
-
-      <div className="bg-white p-6 rounded-lg shadow-md">
-        <div className="mb-4 text-sm text-gray-600">
-          <p>
-            <span className="text-blue-500 font-semibold">Blue slots</span> are
-            booked. You can click on them to cancel a booking
-          </p>
-          <p>
-            <span className="text-grey-500 font-semibold">Grey slots</span> are
-            available. You can click on them to make a booking
-          </p>
-        </div>
-        <ul className="grid grid-cols-7 gap-4">
-          {DAY_OF_THE_WEEK.map((day) => (
-            <li key={day} className="border rounded-lg p-3">
-              <div className="font-semibold text-center bg-gray-100 p-2 mb-3 rounded">
-                {day}
-              </div>
-              {SLOTS_OF_THE_DAY.map((slot) => {
-                const isAvailable =
-                  timeSlots[day as keyof typeof timeSlots]?.includes(slot);
-                return (
-                  <div
-                    key={`${day}-${slot}`}
-                    className={`text-center p-2 mb-3 rounded cursor-pointer ${
-                      isAvailable
-                        ? "bg-gray-300 hover:bg-gray-400"
-                        : "bg-blue-500 hover:bg-blue-600 text-white"
-                    }`}
-                    onClick={() => handleSlotClick(day, slot, isAvailable)}
-                  >
-                    {slot}
-                  </div>
-                );
-              })}
-            </li>
-          ))}
-        </ul>
-      </div>
+    <div className="max-w-6xl mx-auto px-4">
+      {/* Render the appropriate view based on viewMode */}
+      {viewMode === "desktop" && renderDesktopView()}
+      {viewMode === "mobile-days" && renderMobileDaysView()}
+      {viewMode === "mobile-slots" && renderMobileSlotsView()}
 
       <BookingModal
         isOpen={isBookModalOpen}
@@ -246,7 +271,7 @@ const AvailabilityCalendar = () => {
         </div>
       )}
 
-      <Notification
+      <NotificationToast
         message={notification.message}
         type={notification.type}
         isVisible={notification.isVisible}

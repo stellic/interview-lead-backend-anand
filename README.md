@@ -58,7 +58,7 @@ The frontend runs on port `5173`.
 
 ### Running the tests
 
-I have not added any automated tests for this exercise. We can use `jest` if required.
+I have not added any automated tests for the UI for this exercise. We can use `jest` if required.
 
 ## Assumpotions and Simplifications
 

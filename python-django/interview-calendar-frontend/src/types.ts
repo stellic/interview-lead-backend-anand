@@ -37,3 +37,15 @@ export interface BookingData {
   day_of_week: string;
   operation?: 'book' | 'create';
 }
+
+export type NotificationType = "success" | "error" | "info";
+
+export interface NotificationProps {
+  message: string;
+  type: NotificationType;
+  isVisible: boolean;
+  onClose: () => void;
+  autoHideDuration?: number;
+}
+
+export type ViewMode = "desktop" | "mobile-days" | "mobile-slots";

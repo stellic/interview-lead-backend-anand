@@ -70,36 +70,7 @@ export const formatTimeSlotsData = (data: Slot[]): TimeSlots => {
   return formattedData;
 };
 
-/**
- * Creates a date object for the next occurrence of the specified day
- * @param dayName Name of the day (e.g., "Monday")
- * @param timeString Time in format "HH:MM"
- * @returns Date object for the next occurrence of the day at the specified time
- */
-export const createDateForDayAndTime = (dayName: string, timeString: string): Date => {
-  const date = new Date();
-  const dayIndex = DAY_OF_THE_WEEK.indexOf(dayName);
-  
-  // Set the date to the next occurrence of the selected day
-  const currentDay = date.getDay(); // 0 = Sunday, 1 = Monday, etc.
-  const targetDay = dayIndex + 1; // Convert to 1 = Monday, etc.
-  const daysToAdd = (targetDay - currentDay + 7) % 7;
-  
-  date.setDate(date.getDate() + daysToAdd);
-  
-  // Set the time
-  const [hours, minutes] = timeString.split(':').map(Number);
-  date.setHours(hours, minutes, 0, 0);
-  
-  return date;
-};
-
-/**
- * Creates booking data for the API
- * @param day Day of the week
- * @param time Time in format "HH:MM"
- * @returns Booking data object for the API
- */
+// Check the implementation of createBookingData
 export const createBookingData = (day: string, time: string) => {
   const date = createDateForDayAndTime(day, time);
   
@@ -112,4 +83,36 @@ export const createBookingData = (day: string, time: string) => {
     end: endDate.toISOString(),
     day_of_week: day
   };
+};
+
+// Make sure this helper function is correctly implemented
+export const createDateForDayAndTime = (day: string, time: string) => {
+  // Get the current date
+  const now = new Date();
+  
+  // Find the day of the week for the given day string
+  const dayIndex = DAY_OF_THE_WEEK.indexOf(day);
+  if (dayIndex === -1) {
+    throw new Error(`Invalid day: ${day}`);
+  }
+  
+  // Calculate the date for the given day of the week
+  const currentDayOfWeek = now.getDay(); // 0 = Sunday, 1 = Monday, ...
+  const targetDayOfWeek = dayIndex + 1; // Convert to 1 = Monday, ... 7 = Sunday
+  
+  // Calculate days to add to get to the target day
+  let daysToAdd = targetDayOfWeek - currentDayOfWeek;
+  if (daysToAdd <= 0) {
+    daysToAdd += 7; // Add a week if the day has already passed
+  }
+  
+  // Create a new date for the target day
+  const targetDate = new Date(now);
+  targetDate.setDate(now.getDate() + daysToAdd);
+  
+  // Set the time
+  const [hours, minutes] = time.split(':').map(Number);
+  targetDate.setHours(hours, minutes, 0, 0);
+  
+  return targetDate;
 };
