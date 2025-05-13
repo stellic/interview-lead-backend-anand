@@ -3,8 +3,11 @@ import datetime
 from dateutil.relativedelta import *
 import pytz
 
+from .models import FreeTimeSlot
+
 days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
+# Keep this for initial data if the database is empty
 user_relative_free_times: dict[int, list[dict[str, relativedelta]]] = {
     1: [
         # Monday
@@ -40,6 +43,21 @@ def calendar_free(user_id: int) -> list[dict[str, str]]:
     Returns:
         list: A list of available time slots.
     """
+    # Check if we have slots in the database
+    db_slots = FreeTimeSlot.objects.filter(user_id=user_id)
+    
+    # If we have slots in the database, use those
+    if db_slots.exists():
+        return [
+            {
+                "start": slot.start_time.isoformat(),
+                "end": slot.end_time.isoformat(),
+                "day_of_week": slot.day_of_week,
+            }
+            for slot in db_slots
+        ]
+    
+    # Otherwise, use the hardcoded data
     pacific_timezone = pytz.timezone("US/Pacific")
     now_pacific_time = datetime.datetime.now(pacific_timezone)
     midnight_today_pacific_time = now_pacific_time.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -61,6 +79,38 @@ def calendar_free(user_id: int) -> list[dict[str, str]]:
         for relative_free_time in relative_free_times
     ]
 
+
+def add_free_time_slot(user_id: int, start: str, end: str, day_of_week: str) -> dict:
+    """Add a free time slot for a user.
+
+    Args:
+        user_id (int): The id of the user.
+        start (str): The start time in ISO format.
+        end (str): The end time in ISO format.
+        day_of_week (str): The day of the week.
+
+    Returns:
+        dict: The created time slot.
+    """
+    # Parse the ISO format strings to datetime objects
+    start_time = datetime.datetime.fromisoformat(start)
+    end_time = datetime.datetime.fromisoformat(end)
+    
+    # Create a new free time slot
+    slot = FreeTimeSlot.objects.create(
+        user_id=user_id,
+        start_time=start_time,
+        end_time=end_time,
+        day_of_week=day_of_week
+    )
+    
+    return {
+        "start": slot.start_time.isoformat(),
+        "end": slot.end_time.isoformat(),
+        "day_of_week": slot.day_of_week,
+    }
+
+
 def to_utc(dt: datetime.datetime) -> datetime.datetime:
     """Convert a datetime to a UTC datetime.
 
@@ -72,6 +122,7 @@ def to_utc(dt: datetime.datetime) -> datetime.datetime:
     """
     return dt.astimezone(pytz.utc)
 
+
 def to_utc_isoformat(dt: datetime.datetime) -> str:
     """Convert a datetime to a UTC ISO format string.
 
@@ -82,3 +133,43 @@ def to_utc_isoformat(dt: datetime.datetime) -> str:
         str: The UTC ISO format string.
     """
     return to_utc(dt).isoformat()
+
+
+def book_time_slot(user_id: int, start: str, end: str, day_of_week: str) -> dict:
+    """Book a time slot (remove it from available slots) for a user.
+
+    Args:
+        user_id (int): The id of the user.
+        start (str): The start time in ISO format.
+        end (str): The end time in ISO format.
+        day_of_week (str): The day of the week.
+
+    Returns:
+        dict: The booked time slot information.
+    """
+    # Parse the ISO format strings to datetime objects
+    start_time = datetime.datetime.fromisoformat(start)
+    
+    # Find and delete the matching slot
+    try:
+        # Find slots that match the criteria
+        slot = FreeTimeSlot.objects.get(
+            user_id=user_id,
+            day_of_week=day_of_week,
+            start_time__hour=start_time.hour,
+            start_time__minute=start_time.minute
+        )
+        
+        # Store the data before deleting
+        slot_data = {
+            "start": slot.start_time.isoformat(),
+            "end": slot.end_time.isoformat(),
+            "day_of_week": slot.day_of_week,
+        }
+        
+        # Delete the slot (booking it)
+        slot.delete()
+        
+        return slot_data
+    except FreeTimeSlot.DoesNotExist:
+        raise ValueError(f"No available slot found for {day_of_week} at {start_time.strftime('%H:%M')}")
