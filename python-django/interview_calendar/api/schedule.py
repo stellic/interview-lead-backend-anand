@@ -172,7 +172,7 @@ def book_time_slot(user_id: int, start: str, end: str, day_of_week: str) -> dict
         
         return slot_data
     except FreeTimeSlot.DoesNotExist:
-        raise ValueError(f"No available slot found for {day_of_week} at {start_time.strftime('%H:%M')}")
+        raise ValueError(f"No available slot found for {day_of_week} at {start_time.strftime('%H:%M')}. This slot may already be booked.")
 
 def create_free_time_slot(user_id: int, start: str, end: str, day_of_week: str) -> dict:
     """Create a new free time slot for a user.

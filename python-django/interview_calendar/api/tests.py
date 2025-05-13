@@ -200,3 +200,39 @@ class CalendarAPITestCase(TestCase):
         
         # Check that the response is 400 Bad Request
         self.assertEqual(response.status_code, 400)
+    
+    def test_post_book_already_booked_slot(self):
+        """Test POST request to book a slot that's already booked"""
+        url = reverse('user_calendar_free', args=[1])
+        
+        # First, book an available slot
+        slot_to_book = {
+            "start": "2025-05-12T09:00:00+00:00",
+            "end": "2025-05-12T10:00:00+00:00",
+            "day_of_week": "Monday",
+            "operation": "book"
+        }
+        
+        # Make the first POST request to book the slot
+        response = self.client.post(
+            url, 
+            data=json.dumps(slot_to_book),
+            content_type='application/json'
+        )
+        
+        # Check that the first booking was successful
+        self.assertEqual(response.status_code, 200)
+        
+        # Now try to book the same slot again
+        response = self.client.post(
+            url, 
+            data=json.dumps(slot_to_book),
+            content_type='application/json'
+        )
+        
+        # Check that the response is 404 Not Found
+        self.assertEqual(response.status_code, 404)
+        
+        # Check that the error message indicates the slot is already booked
+        data = json.loads(response.content)
+        self.assertIn("already be booked", data.get("error", ""))
