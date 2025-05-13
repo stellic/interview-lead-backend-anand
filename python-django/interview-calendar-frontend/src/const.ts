@@ -1,0 +1,1 @@
+export const AVAILABILITY_API_URL = "/api/users/1/calendar/free";

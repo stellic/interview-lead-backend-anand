@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { TimeSlots } from "../types";
-import { AVAILABILITY_API_URL } from "../config";
+import { AVAILABILITY_API_URL } from "../const";
 import BookingModal from "../components/BookingModal";
 import UnbookModal from "../components/UnbookModal";
 import Notification, { NotificationType } from "../components/Notification";

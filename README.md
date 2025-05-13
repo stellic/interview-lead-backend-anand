@@ -56,6 +56,10 @@ npm run dev
 
 The frontend runs on port `5173`.
 
+### Running the tests
+
+I have not added any automated tests for this exercise. We can use `jest` if required.
+
 ## Assumpotions and Simplifications
 
 1. All slots are in 30 mins increments, starting 9 AM and ending 5 PM. Data cleaning is out of scope
